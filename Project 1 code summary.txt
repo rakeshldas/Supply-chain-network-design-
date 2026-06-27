@@ -1,0 +1,1441 @@
+Below is a **simple line-by-line explanation** of your Project 1 code. You can copy this directly into Notepad and use it for interview explanation.
+
+One important note first: your pasted code is repeated twice. You only need to keep it **once** in your notebook. If you run the full pasted version as it is, Gurobi will solve the same model two times.
+
+---
+
+# Line-by-Line Explanation of Supply Network Design Code
+
+## 1. Importing Required Libraries
+
+```python
+import gurobipy as gp
+```
+
+This line imports the Gurobi Python package.
+
+I use `gp` as a short name for `gurobipy`.
+
+So instead of writing `gurobipy.Model()`, I can write `gp.Model()`.
+
+---
+
+```python
+from gurobipy import GRB
+```
+
+This imports important Gurobi constants.
+
+For example:
+
+```text
+GRB.CONTINUOUS
+GRB.BINARY
+GRB.MINIMIZE
+GRB.OPTIMAL
+```
+
+These are used to define variable types, objective type, and solver status.
+
+---
+
+```python
+import pandas as pd
+```
+
+This imports Pandas.
+
+Pandas is used to create clean result tables after Gurobi solves the model.
+
+For example, depot results, factory-to-depot flow results, and depot-to-customer flow results.
+
+---
+
+```python
+import matplotlib.pyplot as plt
+```
+
+This imports Matplotlib.
+
+Matplotlib is used for plotting charts.
+
+In this specific code, we imported it, but the chart is not yet added in this block.
+
+Later, we can use it to plot depot utilization or shipment flow charts.
+
+---
+
+# 2. Defining the Data Section
+
+```python
+factories = ["Factory_1", "Factory_2"]
+```
+
+This creates a list of factories.
+
+Here, the company has two factories:
+
+```text
+Factory_1
+Factory_2
+```
+
+These are the supply sources.
+
+---
+
+```python
+depots = ["Depot_1", "Depot_2", "Depot_3"]
+```
+
+This creates a list of depots.
+
+Here, the company has three possible depots:
+
+```text
+Depot_1
+Depot_2
+Depot_3
+```
+
+The model will decide which depots should be opened.
+
+---
+
+```python
+customers = ["Customer_1", "Customer_2", "Customer_3", "Customer_4"]
+```
+
+This creates a list of customers.
+
+There are four customers whose demand must be satisfied.
+
+---
+
+# 3. Factory Capacity Data
+
+```python
+factory_capacity = {
+    "Factory_1": 500,
+    "Factory_2": 450
+}
+```
+
+This dictionary stores the maximum supply capacity of each factory.
+
+It means:
+
+```text
+Factory_1 can supply at most 500 units.
+Factory_2 can supply at most 450 units.
+```
+
+So total factory capacity is:
+
+```text
+500 + 450 = 950 units
+```
+
+---
+
+# 4. Depot Capacity Data
+
+```python
+depot_capacity = {
+    "Depot_1": 400,
+    "Depot_2": 350,
+    "Depot_3": 300
+}
+```
+
+This dictionary stores the maximum handling capacity of each depot.
+
+It means:
+
+```text
+Depot_1 can handle at most 400 units.
+Depot_2 can handle at most 350 units.
+Depot_3 can handle at most 300 units.
+```
+
+The depot can handle this quantity only if it is opened.
+
+---
+
+# 5. Customer Demand Data
+
+```python
+customer_demand = {
+    "Customer_1": 180,
+    "Customer_2": 220,
+    "Customer_3": 260,
+    "Customer_4": 190
+}
+```
+
+This dictionary stores the demand of each customer.
+
+It means:
+
+```text
+Customer_1 needs 180 units.
+Customer_2 needs 220 units.
+Customer_3 needs 260 units.
+Customer_4 needs 190 units.
+```
+
+Total customer demand is:
+
+```text
+180 + 220 + 260 + 190 = 850 units
+```
+
+The model must satisfy this demand exactly.
+
+---
+
+# 6. Fixed Depot Opening Cost
+
+```python
+fixed_depot_cost = {
+    "Depot_1": 1200,
+    "Depot_2": 1000,
+    "Depot_3": 900
+}
+```
+
+This dictionary stores the fixed cost of opening each depot.
+
+It means:
+
+```text
+If Depot_1 is opened, the company pays 1200.
+If Depot_2 is opened, the company pays 1000.
+If Depot_3 is opened, the company pays 900.
+```
+
+This cost is paid only if the depot is opened.
+
+This is important because the model should not open a depot unless it helps reduce total supply chain cost.
+
+---
+
+# 7. Factory-to-Depot Transportation Cost
+
+```python
+cost_factory_to_depot = {
+    ("Factory_1", "Depot_1"): 4,
+    ("Factory_1", "Depot_2"): 6,
+    ("Factory_1", "Depot_3"): 9,
+    ("Factory_2", "Depot_1"): 5,
+    ("Factory_2", "Depot_2"): 4,
+    ("Factory_2", "Depot_3"): 3
+}
+```
+
+This dictionary stores the transportation cost per unit from each factory to each depot.
+
+For example:
+
+```text
+Shipping 1 unit from Factory_1 to Depot_1 costs 4.
+Shipping 1 unit from Factory_1 to Depot_2 costs 6.
+Shipping 1 unit from Factory_2 to Depot_3 costs 3.
+```
+
+So if the model ships 100 units from Factory_2 to Depot_3, the cost will be:
+
+```text
+100 × 3 = 300
+```
+
+---
+
+# 8. Depot-to-Customer Transportation Cost
+
+```python
+cost_depot_to_customer = {
+    ("Depot_1", "Customer_1"): 3,
+    ("Depot_1", "Customer_2"): 5,
+    ("Depot_1", "Customer_3"): 7,
+    ("Depot_1", "Customer_4"): 6,
+
+    ("Depot_2", "Customer_1"): 4,
+    ("Depot_2", "Customer_2"): 3,
+    ("Depot_2", "Customer_3"): 5,
+    ("Depot_2", "Customer_4"): 4,
+
+    ("Depot_3", "Customer_1"): 7,
+    ("Depot_3", "Customer_2"): 6,
+    ("Depot_3", "Customer_3"): 3,
+    ("Depot_3", "Customer_4"): 4
+}
+```
+
+This dictionary stores the cost per unit from each depot to each customer.
+
+For example:
+
+```text
+Shipping 1 unit from Depot_1 to Customer_1 costs 3.
+Shipping 1 unit from Depot_2 to Customer_2 costs 3.
+Shipping 1 unit from Depot_3 to Customer_3 costs 3.
+```
+
+The model will choose the cheapest routes while respecting depot capacity and customer demand.
+
+---
+
+# 9. Creating the Gurobi Model
+
+```python
+model = gp.Model("Supply_Network_Design")
+```
+
+This creates a new Gurobi optimization model.
+
+The model name is:
+
+```text
+Supply_Network_Design
+```
+
+This is just a label for the model.
+
+From this point onward, we add variables, objective function, and constraints to this model.
+
+---
+
+# 10. Creating Factory-to-Depot Flow Variables
+
+```python
+flow_fd = model.addVars(
+    factories, depots,
+    lb=0,
+    vtype=GRB.CONTINUOUS,
+    name="Factory_to_Depot_Flow"
+)
+```
+
+This creates decision variables for quantity shipped from factories to depots.
+
+The variable is called:
+
+```text
+flow_fd
+```
+
+It means:
+
+```text
+flow_fd[f, d] = quantity shipped from factory f to depot d
+```
+
+Example:
+
+```text
+flow_fd["Factory_1", "Depot_2"]
+```
+
+means:
+
+```text
+quantity shipped from Factory_1 to Depot_2
+```
+
+Explanation of the arguments:
+
+```text
+factories, depots
+```
+
+This creates one variable for every factory-depot pair.
+
+Since there are 2 factories and 3 depots, the model creates:
+
+```text
+2 × 3 = 6 factory-to-depot flow variables
+```
+
+---
+
+```text
+lb=0
+```
+
+This means lower bound is 0.
+
+So shipment quantity cannot be negative.
+
+---
+
+```text
+vtype=GRB.CONTINUOUS
+```
+
+This means the variable is continuous.
+
+So the flow can technically be 10.5, 25.75, or any non-negative value.
+
+In real industrial cases, if the unit must be whole cartons or trucks, we can change it to integer.
+
+---
+
+```text
+name="Factory_to_Depot_Flow"
+```
+
+This gives a readable name to the variable inside Gurobi.
+
+---
+
+# 11. Creating Depot-to-Customer Flow Variables
+
+```python
+flow_dc = model.addVars(
+    depots, customers,
+    lb=0,
+    vtype=GRB.CONTINUOUS,
+    name="Depot_to_Customer_Flow"
+)
+```
+
+This creates decision variables for quantity shipped from depots to customers.
+
+The variable is called:
+
+```text
+flow_dc
+```
+
+It means:
+
+```text
+flow_dc[d, c] = quantity shipped from depot d to customer c
+```
+
+Example:
+
+```text
+flow_dc["Depot_2", "Customer_4"]
+```
+
+means:
+
+```text
+quantity shipped from Depot_2 to Customer_4
+```
+
+Since there are 3 depots and 4 customers, the model creates:
+
+```text
+3 × 4 = 12 depot-to-customer flow variables
+```
+
+Again:
+
+```text
+lb=0
+```
+
+means no negative shipment.
+
+```text
+vtype=GRB.CONTINUOUS
+```
+
+means shipment quantity can be continuous.
+
+---
+
+# 12. Creating Depot Opening Binary Variables
+
+```python
+open_depot = model.addVars(
+    depots,
+    vtype=GRB.BINARY,
+    name="Open_Depot"
+)
+```
+
+This creates binary decision variables for depot opening.
+
+The variable is called:
+
+```text
+open_depot
+```
+
+It means:
+
+```text
+open_depot[d] = 1 if depot d is opened
+open_depot[d] = 0 if depot d is closed
+```
+
+Example:
+
+```text
+open_depot["Depot_1"] = 1
+```
+
+means:
+
+```text
+Depot_1 is opened
+```
+
+Example:
+
+```text
+open_depot["Depot_1"] = 0
+```
+
+means:
+
+```text
+Depot_1 is closed
+```
+
+This is a binary variable because a depot cannot be half-open.
+
+It must be either open or closed.
+
+---
+
+# 13. Objective Function
+
+```python
+model.setObjective(
+```
+
+This tells Gurobi that we are now defining the objective function.
+
+The objective function is the main goal of the model.
+
+Here, our goal is:
+
+```text
+Minimize total supply chain cost
+```
+
+---
+
+```python
+    gp.quicksum(cost_factory_to_depot[f, d] * flow_fd[f, d]
+                for f in factories for d in depots)
+```
+
+This is the first part of the objective function.
+
+It calculates total factory-to-depot transportation cost.
+
+For every factory and every depot:
+
+```text
+cost per unit from factory to depot × quantity shipped from factory to depot
+```
+
+Example:
+
+```text
+If Factory_1 ships 100 units to Depot_1
+and the cost per unit is 4,
+then cost = 4 × 100 = 400
+```
+
+`gp.quicksum()` is Gurobi’s efficient way to add many terms.
+
+---
+
+```python
+    +
+    gp.quicksum(cost_depot_to_customer[d, c] * flow_dc[d, c]
+                for d in depots for c in customers)
+```
+
+This is the second part of the objective function.
+
+It calculates total depot-to-customer transportation cost.
+
+For every depot and every customer:
+
+```text
+cost per unit from depot to customer × quantity shipped from depot to customer
+```
+
+Example:
+
+```text
+If Depot_2 ships 220 units to Customer_2
+and the cost per unit is 3,
+then cost = 3 × 220 = 660
+```
+
+---
+
+```python
+    +
+    gp.quicksum(fixed_depot_cost[d] * open_depot[d]
+                for d in depots),
+```
+
+This is the third part of the objective function.
+
+It calculates total fixed cost for opening depots.
+
+For every depot:
+
+```text
+fixed opening cost × depot opening decision
+```
+
+Example:
+
+```text
+If Depot_1 is opened:
+open_depot["Depot_1"] = 1
+Fixed cost = 1200 × 1 = 1200
+```
+
+If Depot_1 is closed:
+
+```text
+open_depot["Depot_1"] = 0
+Fixed cost = 1200 × 0 = 0
+```
+
+So the fixed cost is paid only when the depot is opened.
+
+---
+
+```python
+    GRB.MINIMIZE
+)
+```
+
+This tells Gurobi that the objective is to minimize the total cost.
+
+So Gurobi will search for the lowest-cost feasible supply chain design.
+
+---
+
+# 14. Factory Capacity Constraints
+
+```python
+for f in factories:
+```
+
+This loop goes through each factory one by one.
+
+First it handles `Factory_1`, then `Factory_2`.
+
+---
+
+```python
+    model.addConstr(
+```
+
+This tells Gurobi that we are adding a constraint.
+
+A constraint is a rule that the solution must follow.
+
+---
+
+```python
+        gp.quicksum(flow_fd[f, d] for d in depots) <= factory_capacity[f],
+```
+
+This is the factory capacity constraint.
+
+It means:
+
+```text
+Total quantity shipped from factory f to all depots
+must be less than or equal to
+capacity of factory f
+```
+
+For Factory_1, this becomes:
+
+```text
+flow from Factory_1 to Depot_1
++ flow from Factory_1 to Depot_2
++ flow from Factory_1 to Depot_3
+<= 500
+```
+
+For Factory_2, this becomes:
+
+```text
+flow from Factory_2 to Depot_1
++ flow from Factory_2 to Depot_2
++ flow from Factory_2 to Depot_3
+<= 450
+```
+
+---
+
+```python
+        name=f"Factory_Capacity_{f}"
+    )
+```
+
+This gives a name to the constraint.
+
+For example:
+
+```text
+Factory_Capacity_Factory_1
+Factory_Capacity_Factory_2
+```
+
+This helps when debugging or checking the model.
+
+---
+
+# 15. Depot Flow Balance Constraints
+
+```python
+for d in depots:
+```
+
+This loop goes through each depot one by one.
+
+It handles:
+
+```text
+Depot_1
+Depot_2
+Depot_3
+```
+
+---
+
+```python
+    model.addConstr(
+```
+
+This adds a new constraint to the model.
+
+---
+
+```python
+        gp.quicksum(flow_fd[f, d] for f in factories)
+        ==
+        gp.quicksum(flow_dc[d, c] for c in customers),
+```
+
+This is the depot flow balance constraint.
+
+It means:
+
+```text
+Total quantity entering a depot from all factories
+must be equal to
+total quantity leaving that depot to all customers
+```
+
+For Depot_1, this means:
+
+```text
+Factory_1 to Depot_1 flow
++ Factory_2 to Depot_1 flow
+=
+Depot_1 to Customer_1 flow
++ Depot_1 to Customer_2 flow
++ Depot_1 to Customer_3 flow
++ Depot_1 to Customer_4 flow
+```
+
+This ensures that the depot does not create or lose products.
+
+Whatever enters the depot must leave the depot.
+
+---
+
+```python
+        name=f"Depot_Flow_Balance_{d}"
+    )
+```
+
+This gives a name to each depot flow balance constraint.
+
+Examples:
+
+```text
+Depot_Flow_Balance_Depot_1
+Depot_Flow_Balance_Depot_2
+Depot_Flow_Balance_Depot_3
+```
+
+---
+
+# 16. Depot Capacity Constraints Linked with Depot Opening
+
+```python
+for d in depots:
+```
+
+This loop again goes through each depot.
+
+---
+
+```python
+    model.addConstr(
+```
+
+This adds another constraint.
+
+---
+
+```python
+        gp.quicksum(flow_dc[d, c] for c in customers)
+        <= depot_capacity[d] * open_depot[d],
+```
+
+This is one of the most important constraints in the model.
+
+It links depot flow with depot opening decision.
+
+It means:
+
+```text
+Total quantity shipped from depot d to all customers
+must be less than or equal to
+depot capacity × open depot decision
+```
+
+Now understand the logic carefully.
+
+If Depot_1 is closed:
+
+```text
+open_depot["Depot_1"] = 0
+```
+
+Then:
+
+```text
+Total shipment from Depot_1 <= 400 × 0
+```
+
+So:
+
+```text
+Total shipment from Depot_1 <= 0
+```
+
+This means Depot_1 cannot ship anything.
+
+If Depot_1 is opened:
+
+```text
+open_depot["Depot_1"] = 1
+```
+
+Then:
+
+```text
+Total shipment from Depot_1 <= 400 × 1
+```
+
+So:
+
+```text
+Total shipment from Depot_1 <= 400
+```
+
+This means Depot_1 can ship up to 400 units.
+
+This is called a linking constraint or activation constraint.
+
+---
+
+```python
+        name=f"Depot_Capacity_{d}"
+    )
+```
+
+This gives a name to the depot capacity constraint.
+
+Examples:
+
+```text
+Depot_Capacity_Depot_1
+Depot_Capacity_Depot_2
+Depot_Capacity_Depot_3
+```
+
+---
+
+# 17. Customer Demand Constraints
+
+```python
+for c in customers:
+```
+
+This loop goes through each customer.
+
+It handles:
+
+```text
+Customer_1
+Customer_2
+Customer_3
+Customer_4
+```
+
+---
+
+```python
+    model.addConstr(
+```
+
+This adds a customer demand constraint.
+
+---
+
+```python
+        gp.quicksum(flow_dc[d, c] for d in depots) == customer_demand[c],
+```
+
+This means:
+
+```text
+Total quantity received by customer c from all depots
+must be equal to
+customer demand of c
+```
+
+For Customer_1:
+
+```text
+Flow from Depot_1 to Customer_1
++ Flow from Depot_2 to Customer_1
++ Flow from Depot_3 to Customer_1
+= 180
+```
+
+For Customer_2:
+
+```text
+Flow from Depot_1 to Customer_2
++ Flow from Depot_2 to Customer_2
++ Flow from Depot_3 to Customer_2
+= 220
+```
+
+So every customer receives exactly the required demand.
+
+---
+
+```python
+        name=f"Customer_Demand_{c}"
+    )
+```
+
+This gives a name to the customer demand constraint.
+
+Examples:
+
+```text
+Customer_Demand_Customer_1
+Customer_Demand_Customer_2
+Customer_Demand_Customer_3
+Customer_Demand_Customer_4
+```
+
+---
+
+# 18. Solving the Model
+
+```python
+model.optimize()
+```
+
+This asks Gurobi to solve the optimization model.
+
+At this point, Gurobi has:
+
+```text
+decision variables
+objective function
+constraints
+```
+
+Gurobi now finds the best feasible solution that minimizes total supply chain cost.
+
+---
+
+# 19. Checking Whether the Model Solved Optimally
+
+```python
+if model.status == GRB.OPTIMAL:
+```
+
+This checks whether Gurobi found the optimal solution.
+
+`GRB.OPTIMAL` means:
+
+```text
+Gurobi has found the best possible solution.
+No better feasible solution exists.
+```
+
+---
+
+```python
+    print("Optimal solution found")
+```
+
+This prints a message confirming that the optimal solution was found.
+
+---
+
+```python
+    print("Minimum total supply chain cost:", round(model.ObjVal, 2))
+```
+
+This prints the minimum total supply chain cost.
+
+`model.ObjVal` stores the objective value found by Gurobi.
+
+In this project, it means:
+
+```text
+Minimum total cost =
+factory-to-depot shipping cost
++ depot-to-customer shipping cost
++ fixed depot opening cost
+```
+
+`round(model.ObjVal, 2)` rounds the answer to two decimal places.
+
+---
+
+# 20. Creating Depot Results Table
+
+```python
+    depot_results = pd.DataFrame({
+```
+
+This creates a Pandas DataFrame.
+
+A DataFrame is a table.
+
+This table will show depot-level results.
+
+---
+
+```python
+        "Depot": depots,
+```
+
+This column lists all depot names:
+
+```text
+Depot_1
+Depot_2
+Depot_3
+```
+
+---
+
+```python
+        "Opened": [open_depot[d].X for d in depots],
+```
+
+This column shows whether each depot is opened or closed.
+
+`.X` gives the optimized value of a Gurobi variable.
+
+So:
+
+```text
+open_depot[d].X = 1 means depot is opened.
+open_depot[d].X = 0 means depot is closed.
+```
+
+---
+
+```python
+        "Outbound_Flow": [sum(flow_dc[d, c].X for c in customers) for d in depots],
+```
+
+This column calculates total quantity shipped out from each depot to all customers.
+
+For each depot, it adds:
+
+```text
+flow from that depot to Customer_1
++ flow from that depot to Customer_2
++ flow from that depot to Customer_3
++ flow from that depot to Customer_4
+```
+
+This shows how much each depot is actually used.
+
+---
+
+```python
+        "Capacity": [depot_capacity[d] for d in depots]
+```
+
+This column shows the maximum capacity of each depot.
+
+---
+
+```python
+    })
+```
+
+This closes the DataFrame creation.
+
+At this point, `depot_results` contains a clean depot-level result table.
+
+---
+
+# 21. Creating Factory-to-Depot Result List
+
+```python
+    fd_results = []
+```
+
+This creates an empty list.
+
+We will store only those factory-to-depot routes where positive quantity is shipped.
+
+---
+
+```python
+    for f in factories:
+```
+
+This loop goes through each factory.
+
+---
+
+```python
+        for d in depots:
+```
+
+Inside each factory, this loop goes through each depot.
+
+So the code checks every factory-depot route.
+
+---
+
+```python
+            if flow_fd[f, d].X > 0.0001:
+```
+
+This checks whether the optimized flow from factory `f` to depot `d` is positive.
+
+We use `0.0001` instead of `0` because solvers sometimes return very tiny numerical values like:
+
+```text
+0.00000000001
+```
+
+which are practically zero.
+
+So this condition means:
+
+```text
+Only show routes that are actually used.
+```
+
+---
+
+```python
+                fd_results.append({
+```
+
+This adds the used route to the result list.
+
+---
+
+```python
+                    "From": f,
+```
+
+This stores the factory name.
+
+---
+
+```python
+                    "To": d,
+```
+
+This stores the depot name.
+
+---
+
+```python
+                    "Quantity": flow_fd[f, d].X
+```
+
+This stores the optimized shipment quantity from that factory to that depot.
+
+---
+
+```python
+                })
+```
+
+This closes one route record.
+
+---
+
+# 22. Creating Depot-to-Customer Result List
+
+```python
+    dc_results = []
+```
+
+This creates an empty list for depot-to-customer shipment results.
+
+---
+
+```python
+    for d in depots:
+```
+
+This loop goes through each depot.
+
+---
+
+```python
+        for c in customers:
+```
+
+Inside each depot, this loop goes through each customer.
+
+So the code checks every depot-customer route.
+
+---
+
+```python
+            if flow_dc[d, c].X > 0.0001:
+```
+
+This checks whether the route is used.
+
+Only routes with positive shipment quantity are shown.
+
+---
+
+```python
+                dc_results.append({
+```
+
+This adds the used depot-to-customer route to the result list.
+
+---
+
+```python
+                    "From": d,
+```
+
+This stores the depot name.
+
+---
+
+```python
+                    "To": c,
+```
+
+This stores the customer name.
+
+---
+
+```python
+                    "Quantity": flow_dc[d, c].X
+```
+
+This stores the optimized quantity shipped from that depot to that customer.
+
+---
+
+```python
+                })
+```
+
+This closes one depot-to-customer route record.
+
+---
+
+# 23. Converting Result Lists into Tables
+
+```python
+    fd_df = pd.DataFrame(fd_results)
+```
+
+This converts the factory-to-depot result list into a Pandas table.
+
+The table is called:
+
+```text
+fd_df
+```
+
+It shows:
+
+```text
+From factory
+To depot
+Quantity shipped
+```
+
+---
+
+```python
+    dc_df = pd.DataFrame(dc_results)
+```
+
+This converts the depot-to-customer result list into a Pandas table.
+
+The table is called:
+
+```text
+dc_df
+```
+
+It shows:
+
+```text
+From depot
+To customer
+Quantity shipped
+```
+
+---
+
+# 24. Displaying the Result Tables
+
+```python
+    display(depot_results)
+```
+
+This displays the depot-level result table.
+
+It shows:
+
+```text
+which depot opened
+how much flow went through each depot
+depot capacity
+```
+
+---
+
+```python
+    display(fd_df)
+```
+
+This displays the factory-to-depot shipment table.
+
+It shows the routes used from factories to depots.
+
+---
+
+```python
+    display(dc_df)
+```
+
+This displays the depot-to-customer shipment table.
+
+It shows the routes used from depots to customers.
+
+---
+
+# 25. If No Optimal Solution Is Found
+
+```python
+else:
+    print("No optimal solution found")
+```
+
+This part runs only if Gurobi does not find an optimal solution.
+
+Possible reasons could be:
+
+```text
+demand is more than total supply
+depot capacity is insufficient
+constraints are conflicting
+data has missing cost values
+```
+
+In our current data, the model should find an optimal solution.
+
+---
+
+# 26. Simple Explanation of the Whole Code
+
+This code solves a supply chain network design problem.
+
+The company has:
+
+```text
+2 factories
+3 possible depots
+4 customers
+```
+
+The model decides:
+
+```text
+1. how much to ship from each factory to each depot
+2. how much to ship from each depot to each customer
+3. which depots to open
+```
+
+The objective is:
+
+```text
+Minimize total supply chain cost
+```
+
+Total cost includes:
+
+```text
+factory-to-depot shipping cost
++ depot-to-customer shipping cost
++ fixed cost of opening depots
+```
+
+The model follows these rules:
+
+```text
+Factories cannot ship more than their capacity.
+Depots cannot be used unless opened.
+Open depots cannot exceed their capacity.
+Whatever enters a depot must leave the depot.
+Every customer demand must be fully satisfied.
+```
+
+---
+
+# 27. Interview Explanation in Simple Language
+
+You can say this:
+
+“This code builds a two-stage supply chain optimization model using Gurobi. The first stage is factory-to-depot flow, and the second stage is depot-to-customer flow. I created continuous variables for shipment quantities and binary variables for depot-opening decisions. The objective function minimizes total cost, including transportation cost and depot fixed opening cost. Then I added constraints for factory capacity, depot flow balance, depot capacity linked with depot opening, and customer demand satisfaction. Finally, Gurobi solves the model and returns which depots should open and how much quantity should flow on each route.”
+
+---
+
+# 28. Very Short Interview Version
+
+Use this when the interviewer asks you to explain quickly:
+
+“This is a fixed-charge supply network design model. It decides which depots to open and how products should flow from factories to customers through depots. The model minimizes transportation and depot opening cost while satisfying factory capacity, depot capacity, depot flow balance, and customer demand constraints.”
+
+---
+
+# 29. One-Line Summary
+
+```text
+The code uses Gurobi to design the lowest-cost supply chain network by deciding depot openings and optimal shipment quantities from factories to depots and depots to customers.
+```
